@@ -128,6 +128,7 @@ def on_chat(data):
     room = data['room']
     sid = request.sid
     username = session.get('user', 'Guest')
+    picture = session.get('picture', '')
     role = session.get('role', 'student')
     emit('chat', {'msg': data['msg'], 'sid': sid, 'username': username, 'picture': picture, 'role': role}, room=room, skip_sid=sid)
 
@@ -158,13 +159,23 @@ def on_disconnect():
                 break
         if found: break
 
+@socketio.on('leave-room')
+def on_leave_room(data):
+    room = data.get('room')
+    sid = request.sid
+    username = session.get('user', 'Guest')
+    leave_room(room)
+    if room in room_users:
+        room_users[room] = [u for u in room_users[room] if u['sid'] != sid]
+    emit('user-left', {'sid': sid, 'username': username}, room=room)
+
 @app.route('/end_meeting/<room_id>', methods=['POST'])
 def end_meeting(room_id):
     if session.get('role') == 'teacher':
         active_meetings.discard(room_id)
+        socketio.emit('meeting-ended', to=room_id)
         if room_id in room_users:
             del room_users[room_id]
-        socketio.emit('meeting-ended', room=room_id)
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 

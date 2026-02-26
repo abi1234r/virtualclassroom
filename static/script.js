@@ -416,19 +416,45 @@ function showToast(text) {
     setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// Stop all local media tracks (camera, mic)
+function stopAllMedia() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+    }
+}
+
 // END CALL
 function endCall() {
     if (USER_ROLE === 'teacher') {
-        if (confirm("End meeting for everyone?")) {
-            // Teacher ends the meeting
-            fetch(`/end_meeting/${ROOM}`, { method: 'POST' })
-                .then(() => window.location.href = "/");
-        }
+        showEndCallModal();
     } else {
-        // Student just leaves
+        // Student just leaves immediately
+        stopAllMedia();
         socket.emit("leave-room", { room: ROOM });
-        window.location.href = "/";
+        setTimeout(() => { window.location.href = "/"; }, 300);
     }
+}
+
+function showEndCallModal() {
+    const modal = document.getElementById('endCallModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function hideEndCallModal() {
+    const modal = document.getElementById('endCallModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function confirmEndCall() {
+    hideEndCallModal();
+    stopAllMedia();
+    fetch(`/end_meeting/${ROOM}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => { window.location.href = "/"; })
+        .catch(() => { window.location.href = "/"; });
 }
 
 // Handle meeting ended by teacher
