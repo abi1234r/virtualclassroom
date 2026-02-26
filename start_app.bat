@@ -1,0 +1,3 @@
+@echo off
+echo Starting EduConnect...
+cmd /k "venv\Scripts\python.exe app.py"
