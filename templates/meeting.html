@@ -24,6 +24,12 @@
             background: #000;
         }
 
+        @media screen and (max-width: 768px) {
+            body {
+                height: 100dvh !important;
+            }
+        }
+
         .meeting-container {
             flex: 1 !important;
             height: 0 !important;
@@ -34,7 +40,6 @@
         }
 
         .bottom-bar {
-            height: 80px !important;
             flex-shrink: 0 !important;
             background: #18181b;
             z-index: 100;

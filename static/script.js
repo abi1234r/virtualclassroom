@@ -21,18 +21,44 @@ let audioContext, analyser, microphone;
 // Get camera + mic with optimized constraints for multi-user calls
 navigator.mediaDevices.getUserMedia({
     video: {
-        width: { ideal: 320, max: 640 }, // Lower resolution (QVGA/VGA)
+        width: { ideal: 320, max: 640 },
         height: { ideal: 240, max: 480 },
-        frameRate: { max: 15 } // Lower frame rate to save CPU/Bandwidth
+        frameRate: { max: 15 }
     },
     audio: true
 })
     .then(stream => {
         localStream = stream;
         addVideo(stream, true, "local", "You", USER_ROLE);
-        setupAudioVisualizer(stream, "local"); // Setup local visualizer
+        setupAudioVisualizer(stream, "local");
         socket.emit('join', { room: ROOM });
+    })
+    .catch(err => {
+        console.error("Camera/mic error:", err);
+        // Try audio-only fallback
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            .then(audioStream => {
+                localStream = audioStream;
+                socket.emit('join', { room: ROOM });
+                showCameraError('Camera blocked or unavailable. You can still hear others.', false);
+            })
+            .catch(() => {
+                socket.emit('join', { room: ROOM });
+                showCameraError('Camera and mic permission denied. Please allow access in your browser settings and rejoin.', true);
+            });
     });
+
+function showCameraError(message, fatal) {
+    const videosEl = document.getElementById('videos');
+    videosEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#a1a1aa;font-size:15px;text-align:center;padding:24px;gap:16px;">
+            <span class="material-symbols-rounded" style="font-size:56px;color:${fatal ? '#ef4444' : '#f59e0b'}">${fatal ? 'videocam_off' : 'mic_off'}</span>
+            <div style="font-weight:600;color:white;">${fatal ? 'Permission Denied' : 'Camera Unavailable'}</div>
+            <div style="max-width:280px;line-height:1.6;">${message}</div>
+            <button onclick="location.reload()" style="margin-top:8px;padding:10px 20px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">Try Again</button>
+        </div>
+    `;
+}
 
 // Receive list of existing users
 socket.on('all-users', users => {
