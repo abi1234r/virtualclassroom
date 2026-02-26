@@ -2,5 +2,6 @@ flask
 flask-socketio
 eventlet
 gunicorn
-Werkzeug==2.2.3
+Werkzeug
 requests
+
