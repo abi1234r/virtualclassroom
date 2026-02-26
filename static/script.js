@@ -451,10 +451,9 @@ function hideEndCallModal() {
 function confirmEndCall() {
     hideEndCallModal();
     stopAllMedia();
-    fetch(`/end_meeting/${ROOM}`, { method: 'POST' })
-        .then(res => res.json())
-        .then(() => { window.location.href = "/"; })
-        .catch(() => { window.location.href = "/"; });
+    // Fire-and-forget: notify server in background, redirect immediately
+    fetch(`/end_meeting/${ROOM}`, { method: 'POST' }).catch(() => { });
+    window.location.href = "/";
 }
 
 // Handle meeting ended by teacher
