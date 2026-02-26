@@ -133,6 +133,26 @@
             color: #ffffff !important;
             min-height: 1.5em;
         }
+
+        /* Mobile Sidebar Overlays */
+        @media screen and (max-width: 768px) {
+            .sidebar-panel {
+                width: 100vw !important;
+                right: -100vw !important;
+                bottom: 0 !important;
+                top: 0 !important;
+                z-index: 2000 !important;
+                /* Full screen cover over everything */
+            }
+
+            .sidebar-panel.open {
+                right: 0 !important;
+            }
+
+            .sidebar-panel.open~#videos {
+                padding-right: 0 !important;
+            }
+        }
     </style>
 </head>
 

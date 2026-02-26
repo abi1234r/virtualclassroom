@@ -308,6 +308,26 @@
         .logout-link:hover {
             text-decoration: underline;
         }
+
+        /* Responsive Fixes */
+        @media screen and (max-width: 768px) {
+            .actions-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .brand-logo {
+                font-size: 36px;
+            }
+
+            .action-card {
+                padding: 30px 20px;
+            }
+
+            .brand-section {
+                margin-bottom: 25px;
+            }
+        }
     </style>
 </head>
 
