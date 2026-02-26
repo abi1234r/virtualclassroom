@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduConnect - Connect Anywhere</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 100vh !important;
+            margin: 0;
+            position: relative;
+            overflow: hidden !important;
+            font-family: 'Inter', sans-serif;
+            color: white;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.3), transparent);
+            border-radius: 50%;
+            top: -250px;
+            right: -250px;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            50% {
+                transform: translate(50px, 50px);
+            }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            z-index: 10;
+            padding: 40px 20px;
+            text-align: center;
+            display: block;
+            /* Ensure it stays a block in the centered flex body */
+        }
+
+        .brand-section {
+            margin-bottom: 40px;
+        }
+
+        .brand-logo {
+            font-size: 48px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .action-card {
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 50px 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-card:hover {
+            transform: translateY(-10px);
+            background: rgba(39, 39, 42, 0.7);
+            border-color: rgba(96, 165, 250, 0.4);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .action-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        .action-card h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .action-card p {
+            color: #a1a1aa;
+            font-size: 15px;
+        }
+
+        /* Form Sections */
+        .form-section {
+            display: none;
+            background: rgba(24, 24, 27, 0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            max-width: 420px;
+            margin: 0 auto;
+            animation: fadeIn 0.4s ease-out;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .input-wrapper {
+            display: flex;
+            align-items: center;
+            background: rgba(39, 39, 42, 0.6);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            border-radius: 12px;
+            padding-left: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: #60a5fa;
+            background: rgba(39, 39, 42, 0.8);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+        }
+
+        /* Specificity boost for form inputs to override global style.css */
+        .form-section .form-input {
+            background: transparent !important;
+            border: none !important;
+            padding: 12px 14px !important;
+            color: white !important;
+            outline: none !important;
+            width: 100% !important;
+            font-size: 15px !important;
+            margin-bottom: 0 !important;
+            box-shadow: none !important;
+        }
+
+        /* Prevent white background on autofill */
+        .form-section .form-input:-webkit-autofill,
+        .form-section .form-input:-webkit-autofill:hover,
+        .form-section .form-input:-webkit-autofill:focus,
+        .form-section .form-input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px #27272a inset !important;
+            -webkit-text-fill-color: white !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.4);
+            opacity: 1;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            color: #a1a1aa;
+            cursor: pointer;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .back-btn:hover {
+            color: white;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 14px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .google-btn {
+            background: white;
+            color: #1f2937;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            margin: 20px auto;
+            max-width: 250px;
+        }
+
+        .google-btn:hover {
+            background: #f9fafb;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-radius: 50px;
+            width: fit-content;
+            margin: 0 auto 30px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid var(--brand-primary);
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .logout-link {
+            color: #f87171;
+            font-size: 13px;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+
+        .logout-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="brand-section">
+            <div class="brand-logo">EduConnect</div>
+            <p>Premium Video Conferencing for Everyone</p>
+        </div>
+
+        <div id="mainActions" class="actions-grid">
+            <div class="action-card" onclick="showForm('create')">
+                <span class="material-symbols-rounded action-icon">video_call</span>
+                <h2>Create Meeting</h2>
+                <p>Start a new meeting instantly</p>
+            </div>
+            <div class="action-card" onclick="showForm('join')">
+                <span class="material-symbols-rounded action-icon">group_add</span>
+                <h2>Join Meeting</h2>
+                <p>Join with a meeting code</p>
+            </div>
+        </div>
+
+        <!-- Create Meeting Form -->
+        <div id="createForm" class="form-section">
+            <button class="back-btn" onclick="showMain()"><span class="material-symbols-rounded">arrow_back</span>
+                Back</button>
+            <h2>Start Meeting</h2>
+            <p style="margin-bottom: 25px; color: #a1a1aa;">Enter your name and the administrator password.</p>
+
+            {% if error and "create" in request.path or "password" in error %}
+            <div class="error-msg">{{ error }}</div>
+            {% endif %}
+
+            <form action="/create_meeting" method="POST">
+                <div class="form-group">
+                    <label class="form-label">Your Name</label>
+                    <div class="input-wrapper">
+                        <span class="material-symbols-rounded" style="color:#71717a; font-size: 20px;">person</span>
+                        <input type="text" name="name" class="form-input" placeholder="Enter your name" required
+                            spellcheck="false" pattern="[a-zA-Z\s]+"
+                            title="Only alphabetical characters and spaces are allowed.">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Admin Password</label>
+                    <div class="input-wrapper">
+                        <span class="material-symbols-rounded" style="color:#71717a; font-size: 20px;">lock</span>
+                        <input type="password" name="password" class="form-input" placeholder="Enter password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">Launch Meeting</button>
+            </form>
+        </div>
+
+        <!-- Join Meeting Form -->
+        <div id="joinForm" class="form-section">
+            <button class="back-btn" onclick="showMain()"><span class="material-symbols-rounded">arrow_back</span>
+                Back</button>
+            <h2>Join Meeting</h2>
+            <p style="margin-bottom: 25px; color: #a1a1aa;">Enter your name and the 8-character meeting code.</p>
+
+            {% if error and "ID" in error %}
+            <div class="error-msg">{{ error }}</div>
+            {% endif %}
+
+            <form action="/join_meeting" method="POST">
+                <div class="form-group">
+                    <label class="form-label">Your Name</label>
+                    <div class="input-wrapper">
+                        <span class="material-symbols-rounded" style="color:#71717a; font-size: 20px;">person</span>
+                        <input type="text" name="name" class="form-input" placeholder="Enter your name" required
+                            spellcheck="false" pattern="[a-zA-Z\s]+"
+                            title="Only alphabetical characters and spaces are allowed.">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Meeting Code</label>
+                    <div class="input-wrapper">
+                        <span class="material-symbols-rounded" style="color:#71717a; font-size: 20px;">key</span>
+                        <input type="text" name="room_id" class="form-input" placeholder="e.g. abc-123" required
+                            autocomplete="off">
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit">Join Now</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showForm(type) {
+            document.getElementById('mainActions').style.display = 'none';
+            if (type === 'create') {
+                document.getElementById('createForm').style.display = 'block';
+            } else {
+                document.getElementById('joinForm').style.display = 'block';
+            }
+        }
+
+        function showMain() {
+            document.getElementById('mainActions').style.display = 'grid';
+            document.getElementById('createForm').style.display = 'none';
+            document.getElementById('joinForm').style.display = 'none';
+        }
+
+        // Handle error visibility on load
+        window.onload = () => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('error')) {
+                // If there's an error from the server side (via redirect)
+                // In this simplified version, we'll just show the main screen unless we can identify the source
+            }
+        };
+    </script>
+</body>
+
+</html>
