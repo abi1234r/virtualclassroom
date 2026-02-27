@@ -17,7 +17,6 @@ const MY_PICTURE = typeof USER_PICTURE !== 'undefined' ? USER_PICTURE : '';
 // Audio context for visualizer
 let audioContext, analyser, microphone;
 
-// Get camera + mic
 // Get camera + mic with optimized constraints for multi-user calls
 navigator.mediaDevices.getUserMedia({
     video: {
@@ -35,29 +34,121 @@ navigator.mediaDevices.getUserMedia({
     })
     .catch(err => {
         console.error("Camera/mic error:", err);
-        // Try audio-only fallback
+
+        // Distinguish between permission denied vs device not found
+        const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+        const isNotFound = err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError';
+
+        if (isDenied) {
+            // Don't fallback silently — show a clear, actionable error overlay
+            showCameraError(
+                'permission',
+                'Microphone & Camera access was blocked.',
+                getBrowserPermissionInstructions()
+            );
+            // Still join the room (read-only/listen-only mode)
+            socket.emit('join', { room: ROOM });
+            return;
+        }
+
+        if (isNotFound) {
+            // No camera found — try audio only
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(audioStream => {
+                    localStream = audioStream;
+                    addVideo(null, true, "local", "You (No Camera)", USER_ROLE);
+                    setupAudioVisualizer(audioStream, "local");
+                    socket.emit('join', { room: ROOM });
+                    showToast("No camera found. Joined with audio only.");
+                })
+                .catch(audioErr => {
+                    console.error("Audio fallback failed:", audioErr);
+                    const isAudioDenied = audioErr.name === 'NotAllowedError' || audioErr.name === 'PermissionDeniedError';
+                    showCameraError(
+                        isAudioDenied ? 'permission' : 'fatal',
+                        isAudioDenied ? 'Microphone access was blocked.' : 'No audio or video devices found.',
+                        isAudioDenied ? getBrowserPermissionInstructions() : 'Please connect a microphone or camera and try again.'
+                    );
+                    socket.emit('join', { room: ROOM });
+                });
+            return;
+        }
+
+        // Try camera-only as fallback
         navigator.mediaDevices.getUserMedia({ audio: true, video: false })
             .then(audioStream => {
                 localStream = audioStream;
+                addVideo(null, true, "local", "You (No Camera)", USER_ROLE);
+                setupAudioVisualizer(audioStream, "local");
                 socket.emit('join', { room: ROOM });
-                showCameraError('Camera blocked or unavailable. You can still hear others.', false);
+                showToast("Camera unavailable. Joined with audio only.");
             })
             .catch(() => {
+                showCameraError('fatal', 'Camera and microphone are unavailable.', 'Please check your device connections and browser permissions, then rejoin.');
                 socket.emit('join', { room: ROOM });
-                showCameraError('Camera and mic permission denied. Please allow access in your browser settings and rejoin.', true);
             });
     });
 
-function showCameraError(message, fatal) {
-    const videosEl = document.getElementById('videos');
-    videosEl.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#a1a1aa;font-size:15px;text-align:center;padding:24px;gap:16px;">
-            <span class="material-symbols-rounded" style="font-size:56px;color:${fatal ? '#ef4444' : '#f59e0b'}">${fatal ? 'videocam_off' : 'mic_off'}</span>
-            <div style="font-weight:600;color:white;">${fatal ? 'Permission Denied' : 'Camera Unavailable'}</div>
-            <div style="max-width:280px;line-height:1.6;">${message}</div>
-            <button onclick="location.reload()" style="margin-top:8px;padding:10px 20px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">Try Again</button>
+function getBrowserPermissionInstructions() {
+    const ua = navigator.userAgent;
+    if (ua.includes('Chrome') && !ua.includes('Edg')) {
+        return 'In Chrome: click the <b>camera icon</b> in the address bar → Allow → reload the page.';
+    } else if (ua.includes('Firefox')) {
+        return 'In Firefox: click the <b>blocked camera icon</b> in the address bar → Remove Block → reload.';
+    } else if (ua.includes('Edg')) {
+        return 'In Edge: click the <b>lock icon</b> in the address bar → Permissions → Allow camera & mic → reload.';
+    } else if (ua.includes('Safari')) {
+        return 'In Safari: go to <b>Settings → Websites → Camera & Microphone</b> → Allow for this site → reload.';
+    }
+    return 'Click the <b>lock or camera icon</b> in your browser\'s address bar, allow camera & microphone, then reload.';
+}
+
+function showCameraError(type, title, instructions) {
+    // Remove existing error overlay if any
+    const existing = document.getElementById('cameraErrorOverlay');
+    if (existing) existing.remove();
+
+    const iconName = type === 'permission' ? 'no_photography' : 'videocam_off';
+    const iconColor = type === 'permission' ? '#f59e0b' : '#ef4444';
+    const bgColor = type === 'permission' ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+    const borderColor = type === 'permission' ? 'rgba(245,158,11,0.25)' : 'rgba(239,68,68,0.25)';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cameraErrorOverlay';
+    overlay.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${bgColor};
+        border: 1px solid ${borderColor};
+        border-radius: 16px;
+        padding: 32px 28px;
+        max-width: 360px;
+        width: 90%;
+        text-align: center;
+        z-index: 500;
+        backdrop-filter: blur(8px);
+    `;
+
+    overlay.innerHTML = `
+        <span class="material-symbols-rounded" style="font-size:48px; color:${iconColor}; display:block; margin-bottom:12px;">${iconName}</span>
+        <div style="font-size:16px; font-weight:700; color:white; margin-bottom:10px;">${title}</div>
+        <div style="font-size:13px; color:#a1a1aa; line-height:1.7; margin-bottom:20px;">${instructions}</div>
+        <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+            <button onclick="location.reload()" style="padding:10px 20px; background:#3b82f6; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+                <span class="material-symbols-rounded" style="font-size:16px; vertical-align:middle;">refresh</span>
+                Rejoin
+            </button>
+            <button onclick="document.getElementById('cameraErrorOverlay').remove()" style="padding:10px 20px; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+                Dismiss
+            </button>
         </div>
     `;
+
+    // Append to meeting container so it floats over video grid without breaking layout
+    const container = document.querySelector('.meeting-container') || document.body;
+    container.appendChild(overlay);
 }
 
 // Receive list of existing users
@@ -110,7 +201,6 @@ socket.on('user-left', data => {
 socket.on('raise-hand', data => {
     const wrapper = document.getElementById(data.sid === socket.id ? `wrapper-local` : `wrapper-${data.sid}`);
     if (wrapper) {
-        // Visual indicator on video
         const label = wrapper.querySelector('.user-label');
         const originalHTML = label.innerHTML;
         label.innerHTML = `<span class="material-symbols-rounded" style="font-size:16px; color:#f1c40f;">front_hand</span> ` + label.innerText;
@@ -167,13 +257,28 @@ function addVideo(stream, muted = false, id = "local", name = "User", role = "st
     wrapper.className = 'video-wrapper';
     wrapper.id = `wrapper-${id}`;
 
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = muted;
-    if (id === 'local' && currentFilter !== 'none') {
-        video.classList.add(currentFilter);
+    if (stream) {
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = muted;
+        if (id === 'local' && currentFilter !== 'none') {
+            video.classList.add(currentFilter);
+        }
+        wrapper.appendChild(video);
+    } else {
+        // No camera — show avatar placeholder
+        const placeholder = document.createElement('div');
+        placeholder.style.cssText = `
+            width:100%; height:100%; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; background:#1c1c1e; gap:8px;
+        `;
+        placeholder.innerHTML = `
+            <span class="material-symbols-rounded" style="font-size:48px; color:#3f3f46;">videocam_off</span>
+            <span style="font-size:12px; color:#52525b;">No Camera</span>
+        `;
+        wrapper.appendChild(placeholder);
     }
 
     // Label construction
@@ -183,7 +288,6 @@ function addVideo(stream, muted = false, id = "local", name = "User", role = "st
     label.style.alignItems = 'center';
     label.style.gap = '8px';
 
-    // Role Icon in label
     const roleIcon = document.createElement('span');
     roleIcon.className = 'material-symbols-rounded';
     roleIcon.style.fontSize = '20px';
@@ -201,7 +305,6 @@ function addVideo(stream, muted = false, id = "local", name = "User", role = "st
     label.appendChild(nameSpan);
     label.appendChild(audioDot);
 
-    wrapper.appendChild(video);
     wrapper.appendChild(label);
     videos.appendChild(wrapper);
 }
@@ -226,9 +329,9 @@ function setupAudioVisualizer(stream, id) {
         }
         let average = sum / bufferLength;
 
-        const dot = document.getElementById(`dot-local`); // Local dot
+        const dot = document.getElementById(`dot-local`);
         if (dot) {
-            if (average > 10 && !isMuted) { // Threshold
+            if (average > 10 && !isMuted) {
                 dot.classList.add('speaking');
             } else {
                 dot.classList.remove('speaking');
@@ -317,7 +420,6 @@ function handleEnter(e) {
 function toggleSidebar() {
     const panel = document.getElementById('sidebarPanel');
     panel.classList.toggle('open');
-    // Resize video grid if needed (flexbox handles it mostly)
 }
 
 // MUTE / UNMUTE
@@ -329,14 +431,15 @@ function toggleMute() {
 
     const btn = document.querySelector('.mute-btn');
     btn.classList.toggle('active', isMuted);
-    // Google Meet shows red icon when muted
     btn.innerHTML = isMuted ? '<span class="material-symbols-rounded">mic_off</span>' : '<span class="material-symbols-rounded">mic</span>';
 }
 
 // CAMERA ON / OFF
 function toggleCamera() {
     isCameraOff = !isCameraOff;
-    localStream.getVideoTracks()[0].enabled = !isCameraOff;
+    if (localStream && localStream.getVideoTracks()[0]) {
+        localStream.getVideoTracks()[0].enabled = !isCameraOff;
+    }
 
     const btn = document.querySelector('.camera-btn');
     btn.classList.toggle('active', isCameraOff);
@@ -362,7 +465,7 @@ async function shareScreen() {
 }
 
 function stopScreenShare() {
-    if (localStream) {
+    if (localStream && localStream.getVideoTracks()[0]) {
         replaceVideoTrack(localStream.getVideoTracks()[0]);
     }
     if (screenStream) {
@@ -373,13 +476,13 @@ function stopScreenShare() {
 
 function replaceVideoTrack(newTrack) {
     for (let id in peers) {
-        const sender = peers[id]._pc.getSenders().find(s => s.track.kind === "video");
+        const sender = peers[id]._pc.getSenders().find(s => s.track && s.track.kind === "video");
         if (sender) sender.replaceTrack(newTrack);
     }
     const localWrapper = document.getElementById('wrapper-local');
     if (localWrapper) {
         const video = localWrapper.querySelector('video');
-        video.srcObject = new MediaStream([newTrack]);
+        if (video) video.srcObject = new MediaStream([newTrack]);
     }
 }
 
@@ -391,8 +494,10 @@ function toggleFilter() {
     const localWrapper = document.getElementById('wrapper-local');
     if (localWrapper) {
         const video = localWrapper.querySelector('video');
-        filters.forEach(f => video.classList.remove(f));
-        if (currentFilter !== 'none') video.classList.add(currentFilter);
+        if (video) {
+            filters.forEach(f => video.classList.remove(f));
+            if (currentFilter !== 'none') video.classList.add(currentFilter);
+        }
     }
 
     showToast(`Filter applied: ${currentFilter.replace('filter-', '')}`);
@@ -402,8 +507,6 @@ function toggleFilter() {
 // RAISE HAND
 function raiseHand() {
     socket.emit('raise-hand', { room: ROOM });
-    const btn = document.getElementById('handBtn');
-    // Meet doesn't bounce the button, just highlights or shows notification. We'll simply Toast.
     showToast("You raised your hand ✋");
 }
 
@@ -431,7 +534,6 @@ function endCall() {
     if (USER_ROLE === 'teacher') {
         showEndCallModal();
     } else {
-        // Student just leaves immediately
         stopAllMedia();
         socket.emit("leave-room", { room: ROOM });
         setTimeout(() => { window.location.href = "/"; }, 300);
@@ -451,7 +553,6 @@ function hideEndCallModal() {
 function confirmEndCall() {
     hideEndCallModal();
     stopAllMedia();
-    // Fire-and-forget: notify server in background, redirect immediately
     fetch(`/end_meeting/${ROOM}`, { method: 'POST' }).catch(() => { });
     window.location.href = "/";
 }
@@ -464,7 +565,6 @@ socket.on('meeting-ended', () => {
 
 // Show Participant Count
 function showParticipantCount() {
-    const count = Object.keys(peers).length + 1; // +1 for self
+    const count = Object.keys(peers).length + 1;
     showToast(`Participants: ${count}`);
 }
-
