@@ -219,7 +219,13 @@
                     3. AI needs ~50 words to summarize.
                 </div>
 
-                <div style="margin-top: 20px;">
+                <div style="margin-top: 15px;">
+                    <button class="btn-submit" onclick="testMicrophone()"
+                        style="padding: 10px; font-size: 13px; background: #3b82f6; border: none; margin-bottom: 8px;">
+                        <span class="material-symbols-rounded"
+                            style="font-size: 16px; vertical-align: middle;">mic</span>
+                        Test Microphone (New)
+                    </button>
                     <button class="btn-submit" onclick="generateSummary()"
                         style="padding: 10px; font-size: 13px;">Generate Manual Summary</button>
                     <button class="btn-submit" onclick="resetAI()"
@@ -490,7 +496,9 @@
             rec.onerror = (event) => {
                 console.error("Speech Recognition Error", event.error);
                 if (event.error === 'not-allowed') {
-                    document.getElementById('summaryStatus').innerHTML = "<span style='color:#ef4444'>Mic access denied. Enable mic to use AI.</span>";
+                    document.getElementById('summaryStatus').innerHTML =
+                        "<span style='color:#ef4444'>Mic access denied. AI cannot hear you.</span><br>" +
+                        "<button onclick='testMicrophone()' style='background:none; border:1px solid #ef4444; color:#ef4444; font-size:10px; padding:4px 8px; border-radius:4px; cursor:pointer; margin-top:5px;'>Run Mic Test</button>";
                 } else if (event.error === 'network') {
                     document.getElementById('summaryStatus').innerHTML = "<span style='color:#ef4444'>Network error. Check connection.</span>";
                 }

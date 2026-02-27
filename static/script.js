@@ -17,77 +17,114 @@ const MY_PICTURE = typeof USER_PICTURE !== 'undefined' ? USER_PICTURE : '';
 // Audio context for visualizer
 let audioContext, analyser, microphone;
 
-// Get camera + mic with optimized constraints for multi-user calls
-navigator.mediaDevices.getUserMedia({
-    video: {
-        width: { ideal: 320, max: 640 },
-        height: { ideal: 240, max: 480 },
-        frameRate: { max: 15 }
-    },
-    audio: true
-})
-    .then(stream => {
-        localStream = stream;
-        addVideo(stream, true, "local", "You", USER_ROLE);
-        setupAudioVisualizer(stream, "local");
-        socket.emit('join', { room: ROOM });
-    })
-    .catch(err => {
-        console.error("Camera/mic error:", err);
+// Check for Secure Context (HTTPS or localhost)
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHttps = window.location.protocol === 'https:';
 
-        // Distinguish between permission denied vs device not found
-        const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
-        const isNotFound = err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError';
+    if (!isHttps && !isLocal) {
+        showCameraError(
+            'fatal',
+            'Secure Context Required',
+            'Browser security blocks camera/mic access on <b>HTTP</b>. Please use <b>HTTPS</b> or access via <b>localhost</b>.'
+        );
+    } else {
+        showCameraError(
+            'fatal',
+            'Media Devices Not Supported',
+            'Your browser does not support media device access. Please try a modern browser like Chrome or Edge.'
+        );
+    }
+    // Still join room in listen-only mode
+    socket.emit('join', { room: ROOM });
+} else {
+    const tryAccess = async () => {
+        // Helper to get device counts
+        const getDeviceCounts = async () => {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cams = devices.filter(d => d.kind === 'videoinput');
+            const mics = devices.filter(d => d.kind === 'audioinput');
+            return { cams, mics };
+        };
 
-        if (isDenied) {
-            // Don't fallback silently — show a clear, actionable error overlay
-            showCameraError(
-                'permission',
-                'Microphone & Camera access was blocked.',
-                getBrowserPermissionInstructions()
-            );
-            // Still join the room (read-only/listen-only mode)
+        try {
+            // 1. Try absolute simplest request first (let browser pick defaults)
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localStream = stream;
+            addVideo(localStream, true, "local", "You", USER_ROLE);
+            setupAudioVisualizer(localStream, "local");
             socket.emit('join', { room: ROOM });
-            return;
-        }
+        } catch (err) {
+            console.warn("Primary access failed:", err.name, err.message);
+            const { cams, mics } = await getDeviceCounts();
 
-        if (isNotFound) {
-            // No camera found — try audio only
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(audioStream => {
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                showCameraError('permission', 'Access Blocked', getBrowserPermissionInstructions());
+                socket.emit('join', { room: ROOM });
+                return;
+            }
+
+            // 2. Fallback: Try Audio Only (Aggressive)
+            if (mics.length > 0) {
+                console.log(`Found ${mics.length} microphones, trying them...`);
+                let audioStream = null;
+
+                // First try generic audio
+                try {
+                    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                } catch (e) {
+                    console.warn("Generic audio request failed, cycling devices...");
+                    // Cycle through specific devices if generic fails
+                    for (const mic of mics) {
+                        try {
+                            audioStream = await navigator.mediaDevices.getUserMedia({
+                                audio: { deviceId: { exact: mic.deviceId } },
+                                video: false
+                            });
+                            if (audioStream) break;
+                        } catch (innerE) { console.warn(`Mic ${mic.label} failed:`, innerE.name); }
+                    }
+                }
+
+                if (audioStream) {
                     localStream = audioStream;
                     addVideo(null, true, "local", "You (No Camera)", USER_ROLE);
                     setupAudioVisualizer(audioStream, "local");
+                    showToast("Joined with audio only.");
                     socket.emit('join', { room: ROOM });
-                    showToast("No camera found. Joined with audio only.");
-                })
-                .catch(audioErr => {
-                    console.error("Audio fallback failed:", audioErr);
-                    const isAudioDenied = audioErr.name === 'NotAllowedError' || audioErr.name === 'PermissionDeniedError';
-                    showCameraError(
-                        isAudioDenied ? 'permission' : 'fatal',
-                        isAudioDenied ? 'Microphone access was blocked.' : 'No audio or video devices found.',
-                        isAudioDenied ? getBrowserPermissionInstructions() : 'Please connect a microphone or camera and try again.'
-                    );
-                    socket.emit('join', { room: ROOM });
-                });
-            return;
-        }
+                    return;
+                } else {
+                    alert("Microphone Error: Your browser sees your mic hardware but cannot start it. This is usually due to Windows Privacy settings or another app (Zoom/Teams) using it.");
+                }
+            }
 
-        // Try camera-only as fallback
-        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-            .then(audioStream => {
-                localStream = audioStream;
-                addVideo(null, true, "local", "You (No Camera)", USER_ROLE);
-                setupAudioVisualizer(audioStream, "local");
-                socket.emit('join', { room: ROOM });
-                showToast("Camera unavailable. Joined with audio only.");
-            })
-            .catch(() => {
-                showCameraError('fatal', 'Camera and microphone are unavailable.', 'Please check your device connections and browser permissions, then rejoin.');
-                socket.emit('join', { room: ROOM });
-            });
-    });
+            // 3. Fallback: Try Video Only if Cam exists
+            if (cams.length > 0) {
+                try {
+                    const videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    localStream = videoStream;
+                    addVideo(localStream, true, "local", "You (No Mic)", USER_ROLE);
+                    showToast("Joined with video only (No Mic).");
+                    socket.emit('join', { room: ROOM });
+                    return;
+                } catch (vErr) { console.error("Video fallback failed", vErr); }
+            }
+
+            // 4. Final failure UI
+            let detail = `Browser detected: <b>${cams.length} Cameras</b> and <b>${mics.length} Microphones</b>.`;
+            if (cams.length === 0 && mics.length === 0) {
+                detail = "No media hardware detected. Please plug in a camera or microphone.";
+            } else {
+                detail += `<br><br><b>Windows Fix:</b> Ensure "Allow desktop apps to access" is <b>ON</b> in Privacy settings for BOTH Camera and Microphone.`;
+            }
+
+            showCameraError('fatal', cams.length === 0 && mics.length === 0 ? 'No Hardware Found' : 'Device Access Failed', detail);
+            socket.emit('join', { room: ROOM });
+        }
+    };
+
+    tryAccess();
+}
 
 function getBrowserPermissionInstructions() {
     const ua = navigator.userAgent;
@@ -143,6 +180,23 @@ function showCameraError(type, title, instructions) {
             <button onclick="document.getElementById('cameraErrorOverlay').remove()" style="padding:10px 20px; background:#27272a; color:#a1a1aa; border:1px solid #3f3f46; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
                 Dismiss
             </button>
+            <button onclick="navigator.mediaDevices.enumerateDevices().then(devices => {
+                const info = devices.map(d => d.kind + ': ' + d.label).join('\\n');
+                alert('Diagnostic Info:\\nProtocol: ' + window.location.protocol + 
+                      '\\nHostname: ' + window.location.hostname + 
+                      '\\nUA: ' + navigator.userAgent + 
+                      '\\nmediaDevices: ' + (!!navigator.mediaDevices) + 
+                      '\\ngetUserMedia: ' + (!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) +
+                      '\\nDevices Found:\\n' + (info || 'None (Empty List)'));
+            })" style="width:100%; margin-top:10px; padding:8px; background:transparent; color:#52525b; border:1px dashed #3f3f46; border-radius:8px; font-size:11px; cursor:pointer;">
+                Show Diagnostic Info
+            </button>
+            <div style="width:100%; margin-top:12px; font-size:11px; color:#71717a; text-align:left; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
+                <b>Still having issues?</b><br>
+                1. Check <b>Windows Settings → Privacy → Camera/Microphone</b> (Ensure access is ON).<br>
+                2. Close other apps that might use the camera (Teams, Zoom, etc).<br>
+                3. Try re-plugging your device.
+            </div>
         </div>
     `;
 
@@ -250,6 +304,11 @@ function createPeer(userId, initiator) {
 
 // Add video to grid
 function addVideo(stream, muted = false, id = "local", name = "User", role = "student") {
+    console.log(`Adding video for ${name} (ID: ${id}) - Stream:`, stream ? stream.id : "None");
+    if (stream) {
+        console.log(`  - Video tracks: ${stream.getVideoTracks().length}`);
+        console.log(`  - Audio tracks: ${stream.getAudioTracks().length}`);
+    }
     const existing = document.getElementById(`wrapper-${id}`);
     if (existing) return;
 
@@ -311,35 +370,47 @@ function addVideo(stream, muted = false, id = "local", name = "User", role = "st
 
 // Audio Visualizer (Local only for demo of "pulse")
 function setupAudioVisualizer(stream, id) {
-    if (!AudioContext) return;
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    microphone = audioContext.createMediaStreamSource(stream);
-    microphone.connect(analyser);
-    analyser.fftSize = 256;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
 
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    try {
+        audioContext = new AudioCtx();
+        analyser = audioContext.createAnalyser();
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+        analyser.fftSize = 256;
 
-    function detectSound() {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-            sum += dataArray[i];
-        }
-        let average = sum / bufferLength;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
 
-        const dot = document.getElementById(`dot-local`);
-        if (dot) {
-            if (average > 10 && !isMuted) {
-                dot.classList.add('speaking');
-            } else {
-                dot.classList.remove('speaking');
+        console.log("Audio Visualizer started for stream:", stream.id);
+        const audioTracks = stream.getAudioTracks();
+        console.log("Audio tracks found:", audioTracks.length, audioTracks[0]?.label, "Enabled:", audioTracks[0]?.enabled);
+
+        function detectSound() {
+            if (!analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
             }
+            let average = sum / bufferLength;
+
+            const dot = document.getElementById(`dot-local`);
+            if (dot) {
+                // Lower threshold (was 10) to catch quiet mics
+                if (average > 3 && !isMuted) {
+                    dot.classList.add('speaking');
+                } else {
+                    dot.classList.remove('speaking');
+                }
+            }
+            requestAnimationFrame(detectSound);
         }
-        requestAnimationFrame(detectSound);
+        detectSound();
+    } catch (e) {
+        console.error("Failed to start audio visualizer:", e);
     }
-    detectSound();
 }
 
 
@@ -563,8 +634,18 @@ socket.on('meeting-ended', () => {
     window.location.href = "/";
 });
 
-// Show Participant Count
-function showParticipantCount() {
-    const count = Object.keys(peers).length + 1;
-    showToast(`Participants: ${count}`);
+// Manual Diagnostic Tool
+async function testMicrophone() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const tracks = stream.getAudioTracks();
+        if (tracks.length > 0) {
+            alert(`SUCCESS: Microphone "${tracks[0].label}" is working and connected.\n\nIf you still can't be heard, check your physical mute button or the app's mute button.`);
+            stream.getTracks().forEach(t => t.stop());
+        } else {
+            alert("ERROR: Browser says it accessed the mic, but no audio tracks were found.");
+        }
+    } catch (err) {
+        alert(`MICROPHONE ERROR: ${err.name}\nMessage: ${err.message}\n\nCommon fixes:\n1. Check Windows Privacy -> Microphone.\n2. Ensure "Allow desktop apps" is ON.\n3. Close Zoom/Teams/OBS.`);
+    }
 }
